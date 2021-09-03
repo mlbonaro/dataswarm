@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+
+# See https://our.intern.facebook.com/intern/dex/dataswarm-operators/
+# for a list of all dataswarm operators and usage information.
+from dataswarm.operators import (
+    GlobalDefaults,
+    DummyOperator,
+)
+from dataswarm_commons.infrastructure.idc.google_sheets_api import google_spreadsheet_update
+
+GlobalDefaults.set(
+    schedule="@daily",
+    user="mbonaro",
+    oncall="parternships_deal_desk",
+    data_project_acl="pdd_deal_desk",
+    fail_on_future=False,
+    depends_on_past=False,
+    task_tags=["python-version-3"],
+    macros={"SPREADSHEET_ID": "1EL0btpDlmkLFPJ0MzItW4ksiAX_2bZBb3cy9XOE2R2I"},
+)
+
+a = DummyOperator(
+    dep_list=[],
+)
+
+writeData = google_spreadsheet_update(
+    depsList=[a],
+    spreadsheet_id="1EL0btpDlmkLFPJ0MzItW4ksiAX_2bZBb3cy9XOE2R2I",
+    range_name="Sheet2!A:Z",
+    manifold_bucket ='pdd_deal_desk',
+    has_pii=False,
+    clear_before_write=True,
+    data_sql="""
+        SELECT DISTINCT
+            (team_group_name) AS team_group_name
+        FROM d_employee_plus:hr
+            CROSS JOIN UNNEST(SPLIT(employee_id_org_path_down, '/')) AS t (manager)
+        WHERE ds = '<LATEST_DS:d_employee_plus:hr>'
+            AND manager = '103270'
+            AND team_group_name IS NOT NULL
+    """,
+    operation="write",
+    write_header=True,
+
+)
+
