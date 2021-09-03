@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+
+from dataswarm.operators import (
+    GlobalDefaults,
+    PrestoInsertOperator,
+    WaitForHiveOperator,
+    #HDFS2RaptorOperator,
+)
+#from dataswarm.operators.data_annotations.dsl import input, output
+
+GlobalDefaults.set(
+    user="mbonaro",
+    oncall="parternships_deal_desk",
+    data_project_acl="pdd_deal_desk",
+    schedule="@mondays",
+    auto_dep_list=False,
+    fail_on_future=False,
+    depends_on_past=False,
+)
+
+wait_for_page = WaitForHiveOperator(table="d_employee_plus:hr")
+
+insert_deal_desk_users = PrestoInsertOperator(
+    dep_list=[wait_for_page],
+    namespace="bi",
+    table="<TABLE:pdd_pdr_exemptions>",
+    partition={"ds": "<DATEID>"},
+    create="""
+    CREATE TABLE IF NOT EXISTS <TABLE:pdd_pdr_exemptions> (
+        userid BIGINT,
+        ds DATE
+    )
+    WITH (
+        partitioned_by = ARRAY['ds'],
+        retention_days = 10
+    )
+    """,
+    select="""
+    SELECT DISTINCT
+        personal_fbid AS userid,
+        DATE('<DATEID>') AS ds
+    FROM d_employee_plus:hr
+    WHERE (personal_fbid in (100012944940662,789883584, 544890620, 507949756, 511769335,
+        721686361, 20803016, 642617851, 100002327773075, 105280, 6109581)
+    OR team_name IN ('Central Systems, Data and Tools Team')
+    OR team_name LIKE ('BPP Deal Desk%')
+    )
+    AND ds = '<LATEST_DS:d_employee_plus:hr>'
+;
+    """
+    ,
+)
+
+# raptor_output = HDFS2RaptorOperator(
+#     dep_list=[insert_deal_desk_users],
+#     cluster='bi',
+#     hive_namespace='bi',
+#     raptorx_only=True,
+#     raptorx_enabled=True,
+#     ds="<DATEID>",
+#     hive_table_name="<pdd_pdr_exemptions>",
+#     query_create_table="""
+#       CREATE TABLE IF NOT EXISTS <TABLE:pdd_pdr_exemptions> (
+#         personal_fbid AS userid,
+#         '<DATEID>' AS ds
+#       )
+#       """,
+#     raptor_table_name="<pdd_pdr_exemptions>",
+#     retention=7300,
+# )
